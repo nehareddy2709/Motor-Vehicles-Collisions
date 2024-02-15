@@ -1,0 +1,172 @@
+---
+title: "Final Project- AIT580"
+author: "Neha Reddy Yenugu"
+date: "2023-11-06"
+output: html_document
+---
+
+```{r}
+library(ggplot2) #used for generating graphs.
+#install.packages("mclust")
+library(mclust)
+#install.packages("plotly")
+library(plotly)
+#install.packages("caret")
+library(caret)
+#install.packages("leaflet")
+library(leaflet)
+#install.packages("highcharter")
+library(highcharter)
+# Load necessary packages and data
+#install.packages("tidyverse")
+library(tidyverse)
+#install.packages("lubridate")
+library(lubridate)
+#install.packages("mixtools")
+library(mixtools)
+#install.packages("tidyr")
+library(tidyr)
+#install.packages("lubridate")
+library(lubridate)
+#install.packages("cluster")
+library(cluster)
+#install.packages("GGally")
+library(GGally)
+#install.packages("viridis")
+library(viridis)
+#install.packages("dplyr")
+library(dplyr)
+
+
+```
+
+#  The given dataset has 32 attributes with 280k rows were the datsaet describes vehicle collision in during the period 2012 to 2023.
+It describes when and at what time did collision occur and how many people were injured, or killed on that particular date and time and a specific vechile column is provided and how much severity is there, and what are the most contributing factors(i.e the reason for an accident). SEVERITY is the predictor column where it predicts the degree or level of seriousness, intensity, or impact associated with an event or observation. In my dataset severity column is likely to represent the severity of traffic collisions. It's a crucial variable that provides information about how severe or impactful each recorded collision was. The severity level can help in understanding the potential consequences of the collision and may influence decision-making in areas such as traffic management, safety improvements. 
+
+```{r}
+collision_data <- read.csv("C:\\Users\\nredd\\OneDrive\\Documents\\2nd sem\\AIT580\\Final Project\\collision_data_new.csv")
+```
+
+```{r}
+collision_data =na.omit(collision_data) 
+```
+
+```{r}
+str(collision_data)
+
+```
+
+```{r}
+ # Data cleaning and preprocessing
+data_cleaned <- collision_data %>%
+  mutate(across(everything(), ~ifelse(is.na(.), "Unknown", .))) %>%
+  mutate(across(everything(), as.factor)) %>%
+  mutate(CRASH.TIME = as.POSIXct(CRASH.TIME, format="%Y-%m-%d %H:%M:%S"),
+         Hour = format(CRASH.TIME, format="%H"))
+
+#univariate analysis by time
+# Analyze the relationship between time of day and collisions
+collisions_by_hour <- table(data_cleaned$Hour)
+severity_by_hour <- data_cleaned %>%
+  group_by(Hour) %>%
+  summarize(Average_Severity = mean(SEVERITY, na.rm = TRUE))
+
+# Combine data for plotting
+plot_data <- data.frame(Hour = as.numeric(names(collisions_by_hour)),
+                        Collisions = as.numeric(collisions_by_hour),
+                        Average_Severity = severity_by_hour$Average_Severity)
+
+# Plot using ggplot2
+ggplot(plot_data, aes(x = Hour)) +
+  geom_bar(aes(y = Collisions), stat = "identity", fill = "blue", alpha = 0.7) +
+  labs(title = "Number of Collisions by Hour", x = "Hour of the Day", y = "Number of Collisions") +
+  ylim(0, max(plot_data$Collisions)) +
+  theme_minimal()
+
+
+```
+
+```{r}
+str(data_cleaned)
+```
+
+How does the time of day affect the number of motor vehicle collisions, and is there a correlation between certain times of the day and increased collision severity?
+
+```{r}
+# Convert Hour to numeric
+data_cleaned$Hour <- as.numeric(data_cleaned$Hour)
+
+# Create a heatmap
+average_severity <- data_cleaned %>%
+  group_by(Hour) %>%
+  summarize(Average_Severity = mean(as.numeric(SEVERITY)))
+
+# Plot the heatmap
+ggplot(average_severity, aes(x = Hour, y = 1, fill = Average_Severity)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = mean(average_severity$Average_Severity)) +
+  labs(title = "Average Severity by Hour",
+       x = "Hour of the Day", y = NULL) +
+  theme_minimal() +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+
+```
+
+#mutlivariate analysis correlation between variables
+```{r}
+# Calculate the correlation coefficient
+correlation_coefficient <- cor(as.numeric(data_cleaned$Hour), as.numeric(data_cleaned$SEVERITY), use = "complete.obs")
+
+# Print the correlation coefficient
+print(paste("Correlation Coefficient:", correlation_coefficient))
+
+#correaltion between variables
+Cor_matrix <- cor(collision_data[, c("accident_severity","SEVERITY","NUMBER.OF.PERSONS.INJURED")])
+
+print(Cor_matrix)
+
+#Impact of accident and Number of persons injured on severity
+regression_model <- lm(SEVERITY ~ accident_severity+NUMBER.OF.PERSONS.INJURED, data = collision_data)
+
+summary(regression_model)
+
+#Time series analysis
+#time_series_data <- collision_data[, c("CRASH.DATE", "SEVERITY")]
+#time_series_data
+
+#Geospatial Analysis
+# (Assuming latitude and longitude variables are available)
+ggplot(collision_data, aes(x = LONGITUDE, y = LATITUDE )) +
+  geom_point(aes(color = SEVERITY)) +
+  ggtitle("Collision Hotspots")
+```
+
+The correlation coefficient you obtained, -0.0064, is very close to zero. In general, correlation coefficients close to zero indicate a weak linear relationship between the two variables. Specifically:
+
+A correlation coefficient close to 1 or -1 would suggest a strong positive or negative linear relationship, respectively.
+A correlation coefficient close to 0 indicates a weak or no linear relationship.
+Given that the correlation coefficient is very close to zero, it suggests that there is a weak linear relationship between the hour of the day and collision severity in your dataset. In other words, there doesn't appear to be a significant trend or pattern in how the hour of the day is related to the severity of collisions.
+
+
+#What are the most common contributing factors to motor vehicle collisions, and how do these factors vary by borough or location within New York City?
+
+```{r}
+# Create a table with the data
+table_data <- table(data_cleaned$`CONTRIBUTING.FACTOR.VEHICLE.1`, data_cleaned$`accident_severity`)
+
+# Convert the table to a data frame for plotting
+df <- as.data.frame(as.table(table_data))
+
+# Rename the columns
+colnames(df) <- c("Vehicle Type", "Severity", "Count")
+
+# Create an interactive bar plot using plotly
+plot_ly(df, x = ~`Vehicle Type`, y = ~Count, color = ~Severity, type = "bar") %>%
+  layout(title = "Relationship between Vehicle Type and Severity",
+         xaxis = list(title = "Vehicle Type"),
+         yaxis = list(title = "Count"),
+         barmode = "stack")
+
+```
+
+
